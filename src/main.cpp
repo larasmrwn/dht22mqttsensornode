@@ -41,7 +41,7 @@ Ticker mqttReconnectTimer;
 unsigned long previousMillis = 0; // Stores last time temperature was published
 const long interval = 10000;      // Interval at which to publish sensor readings
 
-void setup()
+void connectToWiFi()
 {
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
     // it is a good practice to make sure your code sets wifi mode how you want it.
@@ -76,6 +76,14 @@ void setup()
         // if you get here you have connected to the WiFi
         Serial.println("connected...yeey :)");
     }
+}
+
+void connectToMQTT()
+{
+}
+void setup()
+{
+
     dht.begin();
     Serial.println(F("DHTxx Unified Sensor Example"));
     // Print temperature sensor details.
@@ -120,6 +128,7 @@ void setup()
     Serial.println(F("------------------------------------"));
     // Set delay between sensor readings based on sensor details.
     delayMS = sensor.min_delay / 1000;
+    connectToWiFi();
 }
 
 void loop()
@@ -137,7 +146,8 @@ void loop()
     else
     {
         Serial.print(F("Temperature: "));
-        Serial.print(event.temperature);
+        temperature = event.temperature;
+        Serial.print(temperature);
         Serial.println(F("°C"));
     }
     // Get humidity event and print its value.
@@ -149,7 +159,8 @@ void loop()
     else
     {
         Serial.print(F("Humidity: "));
-        Serial.print(event.relative_humidity);
+        humidity = event.relative_humidity;
+        Serial.print(humidity);
         Serial.println(F("%"));
     }
 }
