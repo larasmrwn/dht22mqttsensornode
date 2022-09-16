@@ -26,6 +26,7 @@ uint32_t delayMS;
 
 // Raspberry Pi Mosquitto MQTT Broker
 #define MQTT_HOST IPAddress(192, 168, 1, 108)
+#define MQTT_PORT 1883
 
 // Temperature MQTT Topics
 #define MQTT_PUB_TEMP "node1/dht22/temperature"
@@ -38,9 +39,42 @@ float humidity;
 AsyncMqttClient mqttClient;
 Ticker mqttReconnectTimer;
 
+WiFiEventHandler wifiConnectHandler;
+WiFiEventHandler wifiDisconnectHandler;
+Ticker wifiReconnectTimer;
+
 unsigned long previousMillis = 0; // Stores last time temperature was published
 const long interval = 10000;      // Interval at which to publish sensor readings
 
+void getDHT22Readings(){
+    // Get temperature event and print its value.
+    sensors_event_t event;
+    dht.temperature().getEvent(&event);
+    if (isnan(event.temperature))
+    {
+        Serial.println(F("Error reading temperature!"));
+    }
+    else
+    {
+        Serial.print(F("Temperature: "));
+        temperature = event.temperature;
+        Serial.print(temperature);
+        Serial.println(F("°C"));
+    }
+    // Get humidity event and print its value.
+    dht.humidity().getEvent(&event);
+    if (isnan(event.relative_humidity))
+    {
+        Serial.println(F("Error reading humidity!"));
+    }
+    else
+    {
+        Serial.print(F("Humidity: "));
+        humidity = event.relative_humidity;
+        Serial.print(humidity);
+        Serial.println(F("%"));
+    }
+}
 void connectToWiFi()
 {
     WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
@@ -77,10 +111,61 @@ void connectToWiFi()
         Serial.println("connected...yeey :)");
     }
 }
-
-void connectToMQTT()
+void onWifiConnect(const WiFiEventStationModeGotIP &event)
 {
+    Serial.println("Connected to Wi-Fi.");
 }
+
+void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
+{
+    Serial.println("Disconnected from Wi-Fi.");
+    mqttReconnectTimer.detach(); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
+    wifiReconnectTimer.once(2, connectToWiFi);
+}
+void connectToMqtt()
+{
+    Serial.println("Connecting to MQTT...");
+    mqttClient.connect();
+}
+
+void onMqttConnect(bool sessionPresent)
+{
+    Serial.println("Connected to MQTT.");
+    Serial.print("Session present: ");
+    Serial.println(sessionPresent);
+}
+
+void onMqttDisconnect(AsyncMqttClientDisconnectReason reason)
+{
+    Serial.println("Disconnected from MQTT.");
+
+    if (WiFi.isConnected())
+    {
+        mqttReconnectTimer.once(2, connectToMqtt);
+    }
+}
+
+/*void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
+  Serial.println("Subscribe acknowledged.");
+  Serial.print("  packetId: ");
+  Serial.println(packetId);
+  Serial.print("  qos: ");
+  Serial.println(qos);
+}
+
+void onMqttUnsubscribe(uint16_t packetId) {
+  Serial.println("Unsubscribe acknowledged.");
+  Serial.print("  packetId: ");
+  Serial.println(packetId);
+}*/
+
+void onMqttPublish(uint16_t packetId)
+{
+    Serial.print("Publish acknowledged.");
+    Serial.print("  packetId: ");
+    Serial.println(packetId);
+}
+
 void setup()
 {
 
@@ -127,40 +212,41 @@ void setup()
     Serial.println(F("%"));
     Serial.println(F("------------------------------------"));
     // Set delay between sensor readings based on sensor details.
-    delayMS = sensor.min_delay / 1000;
+    delayMS = sensor.min_delay / 100;
+    wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
+    wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
+
+    mqttClient.onConnect(onMqttConnect);
+    mqttClient.onDisconnect(onMqttDisconnect);
+    // mqttClient.onSubscribe(onMqttSubscribe);
+    // mqttClient.onUnsubscribe(onMqttUnsubscribe);
+    mqttClient.onPublish(onMqttPublish);
+    mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+    // If your broker requires authentication (username and password), set them below
+    mqttClient.setCredentials("gateway_broker", "1");
     connectToWiFi();
 }
+
 
 void loop()
 {
     // put your main code here, to run repeatedly:
     // Delay between measurements.
     delay(delayMS);
-    // Get temperature event and print its value.
-    sensors_event_t event;
-    dht.temperature().getEvent(&event);
-    if (isnan(event.temperature))
-    {
-        Serial.println(F("Error reading temperature!"));
-    }
-    else
-    {
-        Serial.print(F("Temperature: "));
-        temperature = event.temperature;
-        Serial.print(temperature);
-        Serial.println(F("°C"));
-    }
-    // Get humidity event and print its value.
-    dht.humidity().getEvent(&event);
-    if (isnan(event.relative_humidity))
-    {
-        Serial.println(F("Error reading humidity!"));
-    }
-    else
-    {
-        Serial.print(F("Humidity: "));
-        humidity = event.relative_humidity;
-        Serial.print(humidity);
-        Serial.println(F("%"));
-    }
+
+    getDHT22Readings();
+    // Serial.println();
+    // Serial.printf("Temperature = %.2f ºC \n", temperature);
+    // Serial.printf("Humidity = %.2f % \n", humidity);
+    
+
+    // Publish an MQTT message on topic esp/bme680/temperature
+    uint16_t packetIdPub1 = mqttClient.publish(MQTT_PUB_TEMP, 1, true, String(temperature).c_str());
+    Serial.printf("Publishing on topic %s at QoS 1, packetId: %i", MQTT_PUB_TEMP, packetIdPub1);
+    Serial.printf("Message: %.2f \n", temperature);
+
+    // Publish an MQTT message on topic esp/bme680/humidity
+    uint16_t packetIdPub2 = mqttClient.publish(MQTT_PUB_HUM, 1, true, String(humidity).c_str());
+    Serial.printf("Publishing on topic %s at QoS 1, packetId %i: ", MQTT_PUB_HUM, packetIdPub2);
+    Serial.printf("Message: %.2f \n", humidity);
 }
