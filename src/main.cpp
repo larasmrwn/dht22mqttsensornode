@@ -46,7 +46,8 @@ Ticker wifiReconnectTimer;
 unsigned long previousMillis = 0; // Stores last time temperature was published
 const long interval = 10000;      // Interval at which to publish sensor readings
 
-void getDHT22Readings(){
+void getDHT22Readings()
+{
     // Get temperature event and print its value.
     sensors_event_t event;
     dht.temperature().getEvent(&event);
@@ -111,9 +112,16 @@ void connectToWiFi()
         Serial.println("connected...yeey :)");
     }
 }
+void connectToMqtt()
+{
+    Serial.println("Connecting to MQTT...");
+    mqttClient.connect();
+}
+
 void onWifiConnect(const WiFiEventStationModeGotIP &event)
 {
     Serial.println("Connected to Wi-Fi.");
+    connectToMqtt();
 }
 
 void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
@@ -121,11 +129,6 @@ void onWifiDisconnect(const WiFiEventStationModeDisconnected &event)
     Serial.println("Disconnected from Wi-Fi.");
     mqttReconnectTimer.detach(); // ensure we don't reconnect to MQTT while reconnecting to Wi-Fi
     wifiReconnectTimer.once(2, connectToWiFi);
-}
-void connectToMqtt()
-{
-    Serial.println("Connecting to MQTT...");
-    mqttClient.connect();
 }
 
 void onMqttConnect(bool sessionPresent)
@@ -227,7 +230,6 @@ void setup()
     connectToWiFi();
 }
 
-
 void loop()
 {
     // put your main code here, to run repeatedly:
@@ -238,7 +240,6 @@ void loop()
     // Serial.println();
     // Serial.printf("Temperature = %.2f ºC \n", temperature);
     // Serial.printf("Humidity = %.2f % \n", humidity);
-    
 
     // Publish an MQTT message on topic esp/bme680/temperature
     uint16_t packetIdPub1 = mqttClient.publish(MQTT_PUB_TEMP, 1, true, String(temperature).c_str());
