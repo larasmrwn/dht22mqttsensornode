@@ -44,7 +44,7 @@ WiFiEventHandler wifiDisconnectHandler;
 Ticker wifiReconnectTimer;
 
 unsigned long previousMillis = 0; // Stores last time temperature was published
-const long interval = 10000;      // Interval at which to publish sensor readings
+const long interval = 15000;      // Interval at which to publish sensor readings
 
 void getDHT22Readings()
 {
@@ -215,7 +215,7 @@ void setup()
     Serial.println(F("%"));
     Serial.println(F("------------------------------------"));
     // Set delay between sensor readings based on sensor details.
-    delayMS = sensor.min_delay / 100;
+    delayMS = sensor.min_delay / 500;
     wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
     wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
 
@@ -240,6 +240,11 @@ void loop()
     // Serial.println();
     // Serial.printf("Temperature = %.2f ºC \n", temperature);
     // Serial.printf("Humidity = %.2f % \n", humidity);
+    // char stringtemp[20];
+    // char stringhumid[20];
+    // sprintf(stringtemp, "%f", temperature);
+    // sprintf(stringhumid, "%f", humidity);
+    // strcat(stringtemp, stringhumid);
 
     // Publish an MQTT message on topic esp/bme680/temperature
     uint16_t packetIdPub1 = mqttClient.publish(MQTT_PUB_TEMP, 1, true, String(temperature).c_str());
